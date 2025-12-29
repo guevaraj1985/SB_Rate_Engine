@@ -1,0 +1,652 @@
+// ============================================================
+//  SHIPPING RATE ENGINE — FULL BACKEND (PART 1 OF 3)
+//  Core Helpers, DIM, Rounding, Pricing, Surcharges
+// ============================================================
+
+
+// ============================================================
+//  USPS fractional tier setup
+// ============================================================
+const USPS_TIERS = [
+  0.0625, 0.125, 0.1875, 0.25,
+  0.3125, 0.375, 0.4375, 0.5,
+  0.5625, 0.625, 0.6875, 0.75,
+  0.8125, 0.875, 0.9375, 0.9999
+];
+
+// ============================================================
+//  HARD‑CODED SURCHARGE TABLES (FedEx + UPS)
+// ============================================================
+
+const FEDEX_SURCHARGES = {
+  "fedex_residential": {
+    "—": 3.08,
+    "Home Delivery": 1.90
+  },
+  "fedex_das_standard": {
+    "Express Commercial": 2.45,
+    "Express Residential": 3.65,
+    "Ground Commercial": 2.45,
+    "Ground Residential": 3.65
+  },
+  "fedex_das_extended": {
+    "Express Commercial": 2.45,
+    "Express Residential": 3.65,
+    "Ground Commercial": 2.45,
+    "Ground Residential": 3.65,
+    "Home Delivery": 3.65
+  },
+  "fedex_dry_ice": {
+    "Express": 6.00
+  },
+  "fedex_direct_signature": {
+    "Express & Ground": 5.90
+  },
+  "fedex_adult_signature": {
+    "Express & Ground": 7.15
+  },
+  "fedex_address_correction": {
+    "Express & Ground": 16.88
+  },
+  "fedex_ahs_manual": {
+    "Express": 3.45,
+    "Ground": 3.45
+  },
+  "fedex_oversize_manual": {
+    "Express": 39.50,
+    "Ground": 39.50
+  }
+};
+
+
+const UPS_SURCHARGES = {
+  "ups_residential": {
+    "Ground": 2.68
+  },
+  "ups_das_residential": {
+    "Ground Residential": 3.07
+  },
+  "ups_das_residential_extended": {
+    "Ground Residential Extended": 4.15
+  },
+  "ups_ahs_p": {
+    "Zone 2": 12.50,
+    "Zone 3-4": 14.50,
+    "Zone 5-6": 15.50,
+    "Zone 7+": 15.50
+  },
+  "ups_ahs_lg": {
+    "Zone 2": 14.00,
+    "Zone 3-4": 15.50,
+    "Zone 5-6": 18.00,
+    "Zone 7+": 18.00
+  },
+  "ups_ahs_w": {
+    "Zone 2": 15.23,
+    "Zone 3-4": 16.63,
+    "Zone 5-6": 18.46,
+    "Zone 7+": 18.46
+  },
+  "ups_large_package": {
+    "Ground Zone 2": 205.00,
+    "Ground Zone 3-4": 225.00,
+    "Ground Zone 5-6": 250.00,
+    "Ground Zone 7+": 250.00
+  }
+};
+
+// ============================================================
+//  Web app entry
+// ============================================================
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('form')
+    .setTitle('Shipping Rate Engine');
+}
+
+
+// ============================================================
+//  Helper: Carrier family
+// ============================================================
+function getCarrierFamily(carrierTab) {
+  const name = String(carrierTab).toLowerCase();
+  if (name.includes('fedex')) return 'fedex';
+  if (name.includes('ups')) return 'ups';
+  if (name.includes('usps')) return 'usps';
+  return 'other';
+}
+
+
+// ============================================================
+//  Helper: DIM divisor by carrier
+// ============================================================
+function getDimDivisor(carrierTab) {
+  const name = String(carrierTab).toLowerCase();
+
+  if (name.includes('fedex')) return 225;
+  if (name.includes('ups')) return 166;
+  if (name.includes('usps')) return 166;
+
+  return 166;
+}
+
+
+// ============================================================
+//  Helper: DIM weight
+// ============================================================
+function calculateDimWeight(length, width, height, divisor) {
+  const L = Number(length);
+  const W = Number(width);
+  const H = Number(height);
+
+  if (!L || !W || !H) return null;
+
+  return (L * W * H) / divisor;
+}
+
+
+// ============================================================
+//  Helper: Round billable weight
+// ============================================================
+function roundBillableWeight(carrierTab, billableWeight) {
+  const name = String(carrierTab).toLowerCase();
+  let w = Number(billableWeight);
+
+  if (name.includes('usps')) {
+    if (w < 1) {
+      for (let t of USPS_TIERS) {
+        if (t >= w) return t;
+      }
+      return 0.9999;
+    }
+    return Math.ceil(w);
+  }
+
+  return Math.ceil(w);
+}
+
+
+// ============================================================
+//  Helper: Pricing tab
+// ============================================================
+function getPricingData() {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName('Pricing');
+  if (!sheet) return null;
+  return sheet.getDataRange().getValues();
+}
+
+
+// ============================================================
+//  Helper: UPS zone buckets
+// ============================================================
+function getUPSZoneBucket(zone) {
+  const z = Number(zone);
+  if (z === 2) return 'Zone 2';
+  if (z === 3 || z === 4) return 'Zone 3-4';
+  if (z === 5 || z === 6) return 'Zone 5-6';
+  if (z >= 7) return 'Zone 7+';
+  return null;
+}
+
+function getUPSLargePkgBucket(zone) {
+  const z = Number(zone);
+  if (z === 2) return 'Ground Zone 2';
+  if (z === 3 || z === 4) return 'Ground Zone 3-4';
+  if (z === 5 || z === 6) return 'Ground Zone 5-6';
+  if (z >= 7) return 'Ground Zone 7+';
+  return null;
+}
+
+
+// ============================================================
+//  Helper: FedEx service type
+// ============================================================
+function getFedExServiceType(carrierTab) {
+  const name = String(carrierTab).toLowerCase();
+  if (name.includes('ground') || name.includes('hd') || name.includes('ge')) {
+    return 'Ground';
+  }
+  return 'Express';
+}
+
+
+// ============================================================
+//  Base rate lookup
+// ============================================================
+function getBaseRate(carrierTab, ratedWeight, zone) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName(carrierTab);
+  if (!sheet) return { error: 'Tab not found: ' + carrierTab };
+
+  const data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) return { error: 'No data in tab: ' + carrierTab };
+
+  const rw = Number(ratedWeight);
+  let rowIndex = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    if (Number(data[i][0]) === rw) {
+      rowIndex = i;
+      break;
+    }
+  }
+
+  if (rowIndex === -1) return { error: 'No row for rated weight ' + rw };
+
+  const header = data[0];
+  const zoneHeader = 'zone ' + zone;
+  let colIndex = -1;
+
+  for (let j = 0; j < header.length; j++) {
+    if (String(header[j]).toLowerCase().trim() === zoneHeader.toLowerCase()) {
+      colIndex = j;
+      break;
+    }
+  }
+
+  if (colIndex === -1) return { error: 'Zone column not found: ' + zoneHeader };
+
+  let rate = data[rowIndex][colIndex];
+  if (typeof rate === 'string') rate = rate.replace(/[^0-9.]/g, '');
+  rate = Number(rate);
+
+  if (isNaN(rate)) return { error: 'Invalid rate value' };
+
+  return { rate: rate };
+}
+
+
+// ============================================================
+//  Automatic surcharges (FedEx AHS + Oversize)
+// ============================================================
+function getAutomaticSurcharges(carrierTab, billableWeight, zone) {
+  const family = getCarrierFamily(carrierTab);
+  const serviceType = getFedExServiceType(carrierTab);
+  const pricing = getPricingData();
+  const autos = [];
+
+  if (!pricing) return autos;
+
+  const bw = Number(billableWeight);
+  const over50 = bw > 50;
+  const over70 = bw > 70;
+
+  if (family === 'fedex') {
+    // AHS
+    if (over50) {
+      const type = 'Demand - AHS';
+      const sub = serviceType === 'Ground' ? 'Ground' : 'Express';
+
+      for (let row of pricing) {
+        if (String(row[4]).trim() === type &&
+            String(row[5]).trim() === sub) {
+          let amt = row[6];
+          if (typeof amt === 'string') amt = amt.replace(/[^0-9.]/g, '');
+          amt = Number(amt);
+          if (!isNaN(amt)) autos.push({ label: 'AHS (Weight > 50 lbs)', amount: amt });
+          break;
+        }
+      }
+    }
+
+    // Oversize
+    if (over70) {
+      const type = 'Demand - Oversize';
+      const sub = serviceType === 'Ground' ? 'Ground' : 'Express';
+
+      for (let row of pricing) {
+        if (String(row[4]).trim() === type &&
+            String(row[5]).trim() === sub) {
+          let amt = row[6];
+          if (typeof amt === 'string') amt = amt.replace(/[^0-9.]/g, '');
+          amt = Number(amt);
+          if (!isNaN(amt)) autos.push({ label: 'Oversize (Weight > 70 lbs)', amount: amt });
+          break;
+        }
+      }
+    }
+  }
+
+  return autos;
+}
+
+
+// ============================================================
+//  Manual surcharges
+// ============================================================
+function getManualSurcharges(carrierTab, zone, selectedKeys) {
+  const family = getCarrierFamily(carrierTab);
+  const serviceType = getFedExServiceType(carrierTab);
+  const res = [];
+
+  if (!selectedKeys || selectedKeys.length === 0) return res;
+
+  // UPS zone buckets
+  const zoneBucket = getUPSZoneBucket(zone);
+  const lpBucket = getUPSLargePkgBucket(zone);
+
+  for (let key of selectedKeys) {
+
+    // -----------------------------
+    // FEDEx
+    // -----------------------------
+    if (family === 'fedex' && FEDEX_SURCHARGES[key]) {
+      const table = FEDEX_SURCHARGES[key];
+
+      // Choose correct subcategory
+      let sub = null;
+
+      if (key.includes("das") || key.includes("residential")) {
+        sub = serviceType === "Ground" ? "Ground Residential" : "Express Residential";
+      }
+
+      if (key === "fedex_residential") {
+        sub = serviceType === "Ground" ? "Home Delivery" : "—";
+      }
+
+      if (key === "fedex_dry_ice") sub = "Express";
+      if (key === "fedex_direct_signature") sub = "Express & Ground";
+      if (key === "fedex_adult_signature") sub = "Express & Ground";
+      if (key === "fedex_address_correction") sub = "Express & Ground";
+
+      if (key === "fedex_ahs_manual") sub = serviceType;
+      if (key === "fedex_oversize_manual") sub = serviceType;
+
+      const amount = table[sub];
+      if (amount != null) {
+        res.push({ label: key, amount });
+      }
+    }
+
+    // -----------------------------
+    // UPS
+    // -----------------------------
+    if (family === 'ups' && UPS_SURCHARGES[key]) {
+      const table = UPS_SURCHARGES[key];
+
+      let sub = null;
+
+      if (key === "ups_residential") sub = "Ground";
+      if (key === "ups_das_residential") sub = "Ground Residential";
+      if (key === "ups_das_residential_extended") sub = "Ground Residential Extended";
+
+      if (key === "ups_ahs_p") sub = zoneBucket;
+      if (key === "ups_ahs_lg") sub = zoneBucket;
+      if (key === "ups_ahs_w") sub = zoneBucket;
+
+      if (key === "ups_large_package") sub = lpBucket;
+
+      const amount = table[sub];
+      if (amount != null) {
+        res.push({ label: key, amount });
+      }
+    }
+  }
+
+  return res;
+}
+// ============================================================
+//  ZIP COORDS LOOKUP (NO GOOGLE MAPS)
+//  Sheet: "Zip Coords" with columns:
+//  ZIP | City | State | Latitude | Longitude
+// ============================================================
+function getZipCoords(zip) {
+  if (!zip) return null;
+
+  let z = String(zip).trim();
+  if (z.length < 5) z = z.padStart(5, '0');
+
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName('Zip Coords');
+  if (!sheet) return null;
+
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    let rowZip = String(data[i][0]).trim();
+    if (rowZip.length < 5) rowZip = rowZip.padStart(5, '0');
+
+    if (rowZip === z) {
+      const lat = Number(data[i][3]);
+      const lng = Number(data[i][4]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng };
+      }
+    }
+  }
+
+  return null;
+}
+
+
+// ============================================================
+//  Distance between ZIPs (Haversine, miles)
+// ============================================================
+function distanceBetweenZips(originZip, destZip) {
+  const o = getZipCoords(originZip);
+  const d = getZipCoords(destZip);
+
+  // ⭐ NEW: Return missing ZIP info instead of null
+  if (!o) return { missingZip: originZip };
+  if (!d) return { missingZip: destZip };
+
+  const R = 3958.8;
+  const toRad = x => x * Math.PI / 180;
+
+  const dLat = toRad(d.lat - o.lat);
+  const dLon = toRad(d.lng - o.lng);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(o.lat)) *
+    Math.cos(toRad(d.lat)) *
+    Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return { miles: R * c };
+}
+
+
+// ============================================================
+//  Mileage → Zone tables
+// ============================================================
+function distanceToZone_USPS(miles) {
+  if (miles <= 50) return 1;
+  if (miles <= 150) return 2;
+  if (miles <= 300) return 3;
+  if (miles <= 600) return 4;
+  if (miles <= 1000) return 5;
+  if (miles <= 1400) return 6;
+  if (miles <= 1800) return 7;
+  return 8;
+}
+
+function distanceToZone_UPS_FedEx(miles) {
+  if (miles <= 150) return 2;
+  if (miles <= 300) return 3;
+  if (miles <= 600) return 4;
+  if (miles <= 1000) return 5;
+  if (miles <= 1400) return 6;
+  if (miles <= 1800) return 7;
+  return 8;
+}
+
+
+// ============================================================
+//  Auto‑zone using ZIP coords
+// ============================================================
+function lookupZoneFromZips(originZip, destZip, carrierTab) {
+  const dist = distanceBetweenZips(originZip, destZip);
+
+  // ⭐ If distanceBetweenZips() found a missing ZIP
+  if (dist && dist.missingZip) {
+    return { missingZip: dist.missingZip };
+  }
+
+  // If distanceBetweenZips() failed entirely
+  if (!dist || typeof dist.miles !== 'number') {
+    return null;
+  }
+
+  const miles = dist.miles;
+
+  // ⭐ Your existing mileage → zone logic
+  return lookupZoneFromMiles(miles, carrierTab);
+}
+// ============================================================
+//  SINGLE SHIPMENT RATING
+// ============================================================
+function getRateSingle(params) {
+  const carrierTab = params.carrier;
+  const weight = Number(params.weight);
+  const L = params.length;
+  const W = params.width;
+  const H = params.height;
+  const selectedSurcharges = params.selectedSurcharges || [];
+  const originZip = params.originZip || '';
+  const destZip = params.destZip || '';
+  const zoneInput = params.zone ? String(params.zone).trim() : '';
+
+  if (!carrierTab || !weight) {
+    return { error: 'Carrier and weight are required.' };
+  }
+
+  // Need either explicit zone or both ZIPs for auto‑zone
+  if (!zoneInput && (!originZip || !destZip)) {
+    return { error: 'Zone or both ZIP codes are required.' };
+  }
+
+// Determine zone: explicit or auto‑zone
+let zoneRaw = zoneInput;
+if (!zoneRaw) {
+
+  // ⭐ NEW auto‑zone logic with missing‑ZIP detection
+  const lookedUp = lookupZoneFromZips(originZip, destZip, carrierTab);
+
+  // If lookup returns { missingZip: "XXXXX" }, bubble it up to frontend
+  if (lookedUp && lookedUp.missingZip) {
+    return { missingZip: lookedUp.missingZip };
+  }
+
+  // If lookup failed entirely
+  if (!lookedUp) {
+    return { error: 'Unable to determine zone from ZIPs.' };
+  }
+
+  zoneRaw = String(lookedUp);
+}
+
+  const family = getCarrierFamily(carrierTab);
+  let effectiveZone = Number(zoneRaw);
+
+  // Normalize for non‑USPS: Zone 1 → Zone 2
+  if (family !== 'usps' && effectiveZone === 1) {
+    effectiveZone = 2;
+  }
+
+  // DIM + billable + rated weight
+  const divisor = getDimDivisor(carrierTab);
+  const dimWeight = calculateDimWeight(L, W, H, divisor);
+  const billableWeight = dimWeight ? Math.max(weight, dimWeight) : weight;
+  const ratedWeight = roundBillableWeight(carrierTab, billableWeight);
+
+  // Base rate
+  const baseResult = getBaseRate(carrierTab, ratedWeight, effectiveZone);
+  if (baseResult.error) {
+    return { error: baseResult.error };
+  }
+  const baseRate = baseResult.rate;
+
+  // Fuel (10%)
+  let fuel = 0;
+if (family !== 'usps') {
+  fuel = baseRate * 0.10;
+}
+
+
+  // Surcharges
+  const autoSurcharges = getAutomaticSurcharges(carrierTab, billableWeight, effectiveZone);
+  const manualSurcharges = getManualSurcharges(carrierTab, effectiveZone, selectedSurcharges);
+
+  let surchargeTotal = 0;
+  autoSurcharges.forEach(s => surchargeTotal += s.amount);
+  manualSurcharges.forEach(s => surchargeTotal += s.amount);
+
+  const total = baseRate + fuel + surchargeTotal;
+
+  return {
+    carrier: carrierTab,
+    inputWeight: weight,
+    dimWeight: dimWeight ? Number(dimWeight.toFixed(2)) : null,
+    billableWeight: Number(billableWeight.toFixed(2)),
+    ratedWeight: ratedWeight,
+    zone: zoneRaw,               // what the user sees as zone
+    effectiveZone: effectiveZone, // internal (after USPS→others normalization)
+    baseRate: Number(baseRate.toFixed(2)),
+    fuel: Number(fuel.toFixed(2)),
+    autoSurcharges: autoSurcharges,
+    manualSurcharges: manualSurcharges,
+    total: Number(total.toFixed(2))
+  };
+}
+function addZipToCoords(zip, city, state, lat, lng) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName("Zip Coords"); // <-- your sheet name
+  sheet.appendRow([zip, city, state, lat, lng]);
+}
+
+// ============================================================
+//  BATCH RATING
+// ============================================================
+function getRateBatch(params) {
+  const lines = params.lines || '';
+  const carrierTab = params.carrier;
+  const selectedSurcharges = params.selectedSurcharges || [];
+  const results = [];
+
+  if (!carrierTab || !lines.trim()) {
+    return { error: 'Carrier and batch lines are required.' };
+  }
+
+  const rows = lines
+    .split('\n')
+    .map(r => r.trim())
+    .filter(r => r !== '');
+
+  rows.forEach(line => {
+    // Expected: weight,zone[,length,width,height]
+    const parts = line.split(',').map(p => p.trim());
+    if (parts.length < 2) {
+      results.push({
+        _rawLine: line,
+        error: 'Invalid format. Expected at least weight,zone.'
+      });
+      return;
+    }
+
+    const weight = Number(parts[0]);
+    const zone = parts[1];
+    const length = parts[2] || '';
+    const width = parts[3] || '';
+    const height = parts[4] || '';
+
+    const singleParams = {
+      carrier: carrierTab,
+      weight: weight,
+      zone: zone,
+      length: length,
+      width: width,
+      height: height,
+      originZip: '',   // batch mode uses explicit zones, no auto‑zone
+      destZip: '',
+      selectedSurcharges: selectedSurcharges
+    };
+
+    const res = getRateSingle(singleParams);
+    res._rawLine = line;
+    results.push(res);
+  });
+
+  return { results: results };
+}
