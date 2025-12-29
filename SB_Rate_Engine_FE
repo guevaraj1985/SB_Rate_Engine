@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root {
+        --sbx-bg: #f3f4f6;           /* Light workspace */
+        --sbx-bg-dark: #f3f4f6;      /* Sidebar + top bar */
+        --sbx-card: #ffffff;
+        --sbx-border: #e5e7eb;
+        --sbx-text: #6D6E71;         /* Soapbox text gray */
+        --sbx-text-light: #9ca3af;   /* Secondary gray */
+        --sbx-primary: #F7941E;      /* Soapbox orange */
+        --sbx-primary-dark: #FBB040; /* Soapbox orange (lighter) */
+        --sbx-accent: #FBB040;
+        --sbx-radius: 8px;
+        --sbx-shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+        --sbx-shadow-md: 0 4px 6px rgba(0,0,0,0.10);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: var(--sbx-bg);
+        color: var(--sbx-text);
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-rows: 56px auto;
+        grid-template-columns: 240px auto;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
+      }
+
+      /* TOP BAR */
+      .app-topbar {
+        grid-column: 1 / 3;
+        background: #f3f4f6;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        border-bottom: 1px solid #222;
+      }
+
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .topbar-logo {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #FBB040, #F7941E);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        color: white;
+      }
+
+      .topbar-title {
+        font-weight: 600;
+        font-size: 15px;
+        color: #000000;
+      }
+
+      .topbar-env {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(247,148,30,0.12);
+        color: #F7941E;
+        border: 1px solid rgba(247,148,30,0.35);
+      }
+
+      .topbar-right {
+        font-size: 12px;
+        color: #000000;
+      }
+
+      /* SIDEBAR */
+      .app-sidebar {
+        background: #f3f4f6;
+        color: #ffffff;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        border-right: 1px solid #ddd;
+      }
+
+      .sidebar-section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #000000;
+        margin-bottom: 6px;
+      }
+
+      .sidebar-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #000000;
+      }
+
+      .sidebar-item.active {
+        background: linear-gradient(90deg, #FBB040, #F7941E);
+        color: white;
+      }
+
+      .sidebar-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        border: 1px solid rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: #000000;
+      }
+
+      .sidebar-footer {
+        font-size: 11px;
+        color: #888;
+      }
+
+      /* MAIN */
+      .app-main {
+        background: var(--sbx-bg);
+        padding: 16px;
+        overflow: auto;
+      }
+
+      .main-header-left h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #000000;
+      }
+
+      .subtitle {
+        font-size: 12px;
+        color: #555;
+      }
+
+      .pill-badge {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(247,148,30,0.1);
+        color: #F7941E;
+        font-size: 11px;
+      }
+
+      .section {
+        background: white;
+        border: 1px solid var(--sbx-border);
+        border-radius: var(--sbx-radius);
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+
+      label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--sbx-text-light);
+      }
+
+      input, select, textarea {
+        width: 100%;
+        padding: 4px 6px;          /* smaller fields */
+        margin-top: 4px;
+        border: 1px solid var(--sbx-border);
+        border-radius: var(--sbx-radius);
+        background: white;
+        font-size: 12px;           /* slightly smaller text */
+      }
+
+      textarea {
+        min-height: 60px;
+      }
+
+      .row {
+        display: flex;
+        gap: 12px;
+      }
+
+      .col {
+        flex: 1;
+      }
+
+      .secondary-text {
+        font-size: 12px;
+        color: var(--sbx-text-light);
+      }
+
+      .radio-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 4px;
+      }
+
+      .surcharges-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 6px 10px;
+      }
+
+      .surcharge-pill {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 6px;
+        background: #f3f3f3;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 11px;
+      }
+
+      .surcharge-pill input {
+        width: 12px;
+        height: 12px;
+      }
+
+      .actions-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      button {
+        background: var(--sbx-primary);
+        color: white;
+        padding: 7px 14px;
+        border: none;
+        border-radius: var(--sbx-radius);
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      button:hover {
+        background: var(--sbx-primary-dark);
+      }
+
+      #result {
+        background: white;
+        border: 1px solid var(--sbx-border);
+        border-radius: var(--sbx-radius);
+        padding: 16px;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+      }
+
+      th, td {
+        border: 1px solid #ddd;
+        padding: 4px 6px;
+        text-align: left;
+      }
+
+      th {
+        background: #f9fafb;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <!-- Top bar -->
+      <div class="app-topbar">
+        <div class="topbar-left">
+          <div class="topbar-logo">R</div>
+          <div>
+            <div class="topbar-title">Rate Engine</div>
+            <div style="font-size:11px; color:#cccccc;">Soapbox Internal Tools</div>
+          </div>
+          <span class="topbar-env">LIVE</span>
+        </div>
+        <div class="topbar-right">
+          Dim-weight · Fuel · AHS · Oversize · Batch
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="app-sidebar">
+        <div>
+          <div class="sidebar-section-title">Tools</div>
+          <div class="sidebar-nav">
+            <div class="sidebar-item active">
+              <div class="sidebar-icon">R</div>
+              <span>Rate Calculator</span>
+            </div>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          Soapbox Internal<br>
+          <span style="color:#bbbbbb;">v1.0</span>
+        </div>
+      </div>
+
+      <!-- Main content -->
+      <div class="app-main">
+        <div class="main-header-left">
+          <h2>Rate Calculator</h2>
+          <div class="subtitle">
+            Live carrier rating with DIM, AHS, Oversize, fuel and batch support
+            <span class="pill-badge">UPS · FedEx · USPS</span>
+          </div>
+        </div>
+
+        <!-- Mode + Carrier -->
+        <div class="section">
+          <div class="mode-toggle">
+            <label>Mode</label>
+            <div class="radio-row">
+              <label><input type="radio" name="mode" value="single" checked> Single</label>
+              <label><input type="radio" name="mode" value="batch"> Batch</label>
+            </div>
+            <span class="secondary-text">Switch between rating one shipment or many at once.</span>
+          </div>
+
+          <div class="row" style="margin-top:8px;">
+            <div class="col">
+              <label>Carrier / Service</label>
+              <select id="carrier">
+                <option>FedEx Express Saver</option>
+                <option>FedEx 2Day</option>
+                <option>USPS GA</option>
+                <option>FedEx HD</option>
+                <option>FedEx GE</option>
+                <option>FedEx Ground</option>
+                <option>UPS Ground - New LIFS</option>
+              </select>
+            </div>
+            <div class="col">
+              <label class="secondary-text">Tip</label>
+              <div class="secondary-text">
+                Carrier tabs must match these names in the workbook for rates to resolve correctly.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Single section -->
+        <div id="singleSection" class="section">
+          <h3>Single Shipment</h3>
+          <div class="row">
+            <div class="col">
+              <label>Weight (lbs)</label>
+              <input id="weight" type="number" step="0.0001">
+            </div>
+            <div class="col">
+              <label>Zone</label>
+              <input id="zone" type="number" min="1" max="16">
+            </div>
+          </div>
+
+          <h4 style="margin-top:14px; margin-bottom:6px; font-size:13px;">Optional Dimensions</h4>
+          <div class="secondary-text" style="margin-bottom:8px;">
+            If length, width, and height are provided, DIM weight is calculated with carrier specific divisors (Fedex 225, UPS/USPS 166).
+          </div>
+
+          <div class="row">
+            <div class="col">
+              <label>Length</label>
+              <input id="length" type="number" step="0.01">
+            </div>
+            <div class="col">
+              <label>Width</label>
+              <input id="width" type="number" step="0.01">
+            </div>
+            <div class="col">
+              <label>Height</label>
+              <input id="height" type="number" step="0.01">
+            </div>
+          </div>
+        </div>
+
+        <!-- ZIP section (auto-zone helper) -->
+        <div class="section">
+          <h3>ZIP Lookup (Auto Zone)</h3>
+          <p class="secondary-text" style="margin-top:0;">
+            Leave Zone blank above to auto calculate using these ZIPs. If you enter a Zone, it will be used instead.
+          </p>
+          <div class="row">
+            <div class="col">
+              <label>Origin ZIP</label>
+              <input id="originZip" type="text">
+            </div>
+            <div class="col">
+              <label>Destination ZIP</label>
+              <input id="destZip" type="text">
+            </div>
+          </div>
+        </div>
+
+        <!-- Batch section -->
+        <div id="batchSection" class="section" style="display:none;">
+          <h3>Batch Shipments</h3>
+          <p class="secondary-text" style="margin-top:0;">
+            One shipment per line. Format:
+            <code>weight,zone</code> or
+            <code>weight,zone,length,width,height</code>
+            <br>Example:
+            <code>1.2,8</code> · <code>0.7,5,10,8,4</code>
+          </p>
+          <textarea id="batchLines" rows="6" placeholder="1.2,8&#10;0.7,5,10,8,4"></textarea>
+        </div>
+
+        <!-- Surcharges -->
+        <div class="section">
+          <h3>Surcharges</h3>
+          <p class="secondary-text" style="margin-top:0;">
+            These are optional manual surcharges from the Pricing tab. AHS (>50 lbs) and Oversize (>70 lbs) are applied automatically when thresholds are met.
+          </p>
+          <div id="surchargeContainer" class="surcharges-group">
+            <!-- Filled dynamically -->
+          </div>
+        </div>
+
+        <!-- Actions + Result -->
+        <div class="actions-row">
+          <button onclick="runLookup()">Calculate</button>
+          <div class="secondary-text">
+            Powered by Google Sheets · Base + DIM + Fuel + Surcharges
+          </div>
+        </div>
+
+        <div id="result-wrapper">
+          <div id="result" style="margin-top: 16px; font-size: 13px;">
+            Ready when you are. Choose a mode, set carrier, and calculate.
+          </div>
+        </div>
+      </div> <!-- /.app-main -->
+    </div>   <!-- /.app-shell -->
+
+    <script>
+      // ----- UI: mode toggle -----
+      const modeRadios = document.getElementsByName('mode');
+      const singleSection = document.getElementById('singleSection');
+      const batchSection = document.getElementById('batchSection');
+      const carrierSelect = document.getElementById('carrier');
+      const surchargeContainer = document.getElementById('surchargeContainer');
+
+      modeRadios.forEach(r => {
+        r.addEventListener('change', () => {
+          updateModeVisibility();
+        });
+      });
+
+      carrierSelect.addEventListener('change', () => {
+        renderSurchargeOptions();
+      });
+
+      function updateModeVisibility() {
+        const mode = getMode();
+        if (mode === 'single') {
+          singleSection.style.display = '';
+          batchSection.style.display = 'none';
+        } else {
+          singleSection.style.display = 'none';
+          batchSection.style.display = '';
+        }
+      }
+
+      function getMode() {
+        for (let i = 0; i < modeRadios.length; i++) {
+          if (modeRadios[i].checked) return modeRadios[i].value;
+        }
+        return 'single';
+      }
+
+      // ----- Surcharge options by carrier family -----
+      function getCarrierFamily(name) {
+        const n = String(name).toLowerCase();
+        if (n.indexOf('fedex') !== -1) return 'fedex';
+        if (n.indexOf('ups') !== -1) return 'ups';
+        if (n.indexOf('usps') !== -1) return 'usps';
+        return 'other';
+      }
+
+      function renderSurchargeOptions() {
+        const carrier = carrierSelect.value;
+        const family = getCarrierFamily(carrier);
+        surchargeContainer.innerHTML = '';
+        let options = [];
+
+        if (family === 'fedex') {
+          options = [
+            { key: 'fedex_residential', label: 'Residential Delivery' },
+            { key: 'fedex_das_standard', label: 'DAS Standard (Residential)' },
+            { key: 'fedex_das_extended', label: 'DAS Extended (Residential)' },
+            { key: 'fedex_dry_ice', label: 'Dry Ice' },
+            { key: 'fedex_direct_signature', label: 'Direct Signature' },
+            { key: 'fedex_adult_signature', label: 'Adult Signature' },
+            { key: 'fedex_address_correction', label: 'Address Correction' },
+            { key: 'fedex_ahs_manual', label: 'AHS (Manual)' },
+            { key: 'fedex_oversize_manual', label: 'Oversize (Manual)' }
+          ];
+        } else if (family === 'ups') {
+          options = [
+            { key: 'ups_residential', label: 'Residential Surcharge' },
+            { key: 'ups_das_residential', label: 'Delivery Area Surcharge (Residential)' },
+            { key: 'ups_das_residential_extended', label: 'Delivery Area Surcharge (Residential Extended)' },
+            { key: 'ups_ahs_p', label: 'Additional Handling P (by zone)' },
+            { key: 'ups_ahs_lg', label: 'Additional Handling L+g (by zone)' },
+            { key: 'ups_ahs_w', label: 'Additional Handling W (by zone)' },
+            { key: 'ups_large_package', label: 'Large Package Surcharge (by zone)' }
+          ];
+        } else {
+          options = [];
+        }
+
+        options.forEach(opt => {
+          const pill = document.createElement('div');
+          pill.className = 'surcharge-pill';
+
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = opt.key;
+          cb.id = 'sc_' + opt.key;
+
+          const lab = document.createElement('label');
+          lab.htmlFor = cb.id;
+          lab.textContent = opt.label;
+
+          pill.appendChild(cb);
+          pill.appendChild(lab);
+          surchargeContainer.appendChild(pill);
+        });
+      }
+
+      function getSelectedSurcharges() {
+        const inputs = surchargeContainer.querySelectorAll('input[type=checkbox]');
+        const selected = [];
+        inputs.forEach(cb => {
+          if (cb.checked) selected.push(cb.value);
+        });
+        return selected;
+      }
+
+      // ----- Main call -----
+      function runLookup() {
+        const mode = getMode();
+        const carrier = carrierSelect.value;
+        const selectedSurcharges = getSelectedSurcharges();
+        const resultDiv = document.getElementById('result');
+
+        if (mode === 'single') {
+          const weight = document.getElementById('weight').value;
+          const zone = document.getElementById('zone').value;
+          const length = document.getElementById('length').value;
+          const width = document.getElementById('width').value;
+          const height = document.getElementById('height').value;
+          const originZip = document.getElementById('originZip').value;
+          const destZip = document.getElementById('destZip').value;
+
+          // Validation:
+          // 1) Weight always required
+          if (!weight || Number(weight) <= 0) {
+            resultDiv.innerHTML = '<b>Please enter a valid weight.</b>';
+            return;
+          }
+
+          // 2) Either:
+          //    - Zone is provided, OR
+          //    - Zone is blank but BOTH ZIPs are provided (for auto-zone server-side)
+          if ((!zone || zone === '') && (!originZip || !destZip)) {
+            resultDiv.innerHTML = '<b>Please enter a zone, or leave zone blank and provide both origin and destination ZIPs.</b>';
+            return;
+          }
+
+          resultDiv.innerHTML = 'Calculating...';
+
+          const params = {
+            carrier: carrier,
+            weight: Number(weight),
+            zone: zone,               // may be blank if using auto-zone
+            length: length,
+            width: width,
+            height: height,
+            originZip: originZip || '',
+            destZip: destZip || '',
+            selectedSurcharges: selectedSurcharges
+          };
+
+          google.script.run
+            .withSuccessHandler(showSingleResult)
+            .getRateSingle(params);
+        } else {
+          const batchLines = document.getElementById('batchLines').value;
+          if (!batchLines.trim()) {
+            resultDiv.innerHTML = '<b>Please enter batch lines.</b>';
+            return;
+          }
+
+          resultDiv.innerHTML = 'Calculating batch...';
+
+          const params = {
+            carrier: carrier,
+            lines: batchLines,
+            selectedSurcharges: selectedSurcharges
+          };
+
+          google.script.run
+            .withSuccessHandler(showBatchResult)
+            .getRateBatch(params);
+        }
+      }
+
+// ----- Render single result -----
+function showSingleResult(res) {
+  const div = document.getElementById('result');
+
+  // ⭐ MISSING ZIP HANDLER — ADD THIS FIRST
+  if (res.missingZip) {
+    handleMissingZip(res.missingZip);
+    return;
+  }
+
+  // Existing error handler
+  if (res.error) {
+    div.innerHTML = '<b>Error:</b> ' + res.error;
+    return;
+  }
+
+  let html = '';
+  html += `<div class="result-heading">${res.carrier}</div>`;
+  html += `<div><span class="result-label">Entered weight:</span> ${res.inputWeight} lbs</div>`;
+  html += `<div><span class="result-label">Billable weight:</span> ${res.billableWeight} lbs</div>`;
+
+  if (res.dimWeight !== null) {
+    html += `<div><span class="result-label">DIM weight:</span> ${res.dimWeight} lbs</div>`;
+  } else {
+    html += `<div><span class="result-label">DIM weight:</span> Not used</div>`;
+  }
+
+  html += `<div><span class="result-label">Rated weight (sheet row):</span> ${res.ratedWeight} lbs</div>`;
+  html += `<div><span class="result-label">Zone:</span> ${res.zone}</div><br>`;
+  html += `<div><span class="result-label">Base rate:</span> $${res.baseRate.toFixed(2)}</div>`;
+  html += `<div><span class="result-label">Fuel (10%):</span> $${res.fuel.toFixed(2)}</div>`;
+
+  if (res.autoSurcharges && res.autoSurcharges.length > 0) {
+    html += `<br><div class="result-label">Automatic surcharges<span class="badge-auto">AUTO</span>:</div>`;
+    res.autoSurcharges.forEach(s => {
+      html += `<div>${s.label}: $${s.amount.toFixed(2)}</div>`;
+    });
+  }
+
+  if (res.manualSurcharges && res.manualSurcharges.length > 0) {
+    html += `<br><div class="result-label">Manual surcharges<span class="badge-manual">MANUAL</span>:</div>`;
+    res.manualSurcharges.forEach(s => {
+      html += `<div>${s.label}: $${s.amount.toFixed(2)}</div>`;
+    });
+  }
+
+  // ⭐ This was floating outside — now correctly placed
+  html += `<br><div class="result-label">Total:</div> $${res.total.toFixed(2)}`;
+
+  div.innerHTML = html;
+}
+
+function handleMissingZip(zip) {
+  const url = `https://www.google.com/search?q=${zip}+city+state+abbreviation+latitude+longitude+coordinates+decimal+degrees`;
+
+  const html = `
+    <div class="missing-zip-box">
+      <p>ZIP <strong>${zip}</strong> was not found.</p>
+      <p>
+        <a href="${url}" target="_blank">
+          Search Google for city/state/lat/lng
+        </a>
+      </p>
+      <button onclick="openAddZipForm('${zip}')">Add ZIP Manually</button>
+    </div>
+  `;
+
+  document.getElementById("result").innerHTML = html;
+}
+
+      // ----- Render batch result -----
+      function showBatchResult(res) {
+        const div = document.getElementById('result');
+        if (res.error) {
+          div.innerHTML = '<b>Error:</b> ' + res.error;
+          return;
+        }
+        const rows = res.results || [];
+        if (rows.length === 0) {
+          div.innerHTML = 'No results.';
+          return;
+        }
+        let html = '<table><tr>' +
+          '<th>Line</th>' +
+          '<th>Status</th>' +
+          '<th>Entered Wt</th>' +
+          '<th>Billable Wt</th>' +
+          '<th>DIM Wt</th>' +
+          '<th>Rated Wt</th>' +
+          '<th>Zone</th>' +
+          '<th>Base</th>' +
+          '<th>Fuel</th>' +
+          '<th>Auto Surcharges</th>' +
+          '<th>Manual Surcharges</th>' +
+          '<th>Total</th>' +
+          '</tr>';
+        rows.forEach(r => {
+          if (r.error) {
+            html += `<tr>
+              <td>${r._rawLine || ''}</td>
+              <td style="color:#b91c1c;">${r.error}</td>
+              <td colspan="10"></td>
+            </tr>`;
+          } else {
+            const auto = (r.autoSurcharges || []).map(s => s.label + ' $' + s.amount.toFixed(2)).join('<br>');
+            const manual = (r.manualSurcharges || []).map(s => s.label + ' $' + s.amount.toFixed(2)).join('<br>');
+            html += `<tr>
+              <td>${r._rawLine || ''}</td>
+              <td style="color:#16a34a;">OK</td>
+              <td>${r.inputWeight}</td>
+              <td>${r.billableWeight}</td>
+              <td>${r.dimWeight !== null ? r.dimWeight : ''}</td>
+              <td>${r.ratedWeight}</td>
+              <td>${r.zone}</td>
+              <td>${r.baseRate.toFixed(2)}</td>
+              <td>${r.fuel.toFixed(2)}</td>
+              <td>${auto}</td>
+              <td>${manual}</td>
+              <td>${r.total.toFixed(2)}</td>
+            </tr>`;
+          }
+        });
+        html += '</table>';
+        div.innerHTML = html;
+      }
+
+<!-- ⭐ Add ZIP Form (must be ABOVE the closing </script>) -->
+<div id="addZipForm" style="display:none; margin-top:20px; padding:15px; border:1px solid #ccc; border-radius:8px;">
+  <h3>Add ZIP</h3>
+
+  <label>ZIP</label><br>
+  <input id="zipAdd_zip" readonly><br><br>
+
+  <label>City</label><br>
+  <input id="zipAdd_city"><br><br>
+
+  <label>State</label><br>
+  <input id="zipAdd_state"><br><br>
+
+  <label>Latitude</label><br>
+  <input id="zipAdd_lat"><br><br>
+
+  <label>Longitude</label><br>
+  <input id="zipAdd_lng"><br><br>
+
+  <button onclick="saveZip()">Save ZIP</button>
+  <button onclick="closeAddZipForm()">Cancel</button>
+</div>
+
+<script>
+// ----- Add ZIP Form Controls -----
+
+function openAddZipForm(zip) {
+  // Fill ZIP field
+  document.getElementById("zipAdd_zip").value = zip;
+
+  // Show the form
+  document.getElementById("addZipForm").style.display = "block";
+
+  // ⭐ Add a "scroll down" hint under the results area
+  const resultDiv = document.getElementById("result");
+  if (resultDiv) {
+    // Remove any existing hint
+    const oldHint = document.getElementById("scrollHint");
+    if (oldHint) oldHint.remove();
+
+    // Create new hint
+    const hint = document.createElement("div");
+    hint.id = "scrollHint";
+    hint.style.marginTop = "10px";
+    hint.style.fontWeight = "bold";
+    hint.style.color = "#1d4ed8";
+    hint.textContent = "Scroll down to add ZIP";
+
+    resultDiv.appendChild(hint);
+  }
+}
+
+function closeAddZipForm() {
+  // Hide the form
+  document.getElementById("addZipForm").style.display = "none";
+
+  // Remove scroll hint if present
+  const oldHint = document.getElementById("scrollHint");
+  if (oldHint) oldHint.remove();
+}
+
+function saveZip() {
+  let zip = document.getElementById("zipAdd_zip").value;
+  let city = document.getElementById("zipAdd_city").value;
+  let state = document.getElementById("zipAdd_state").value;
+  let lat = document.getElementById("zipAdd_lat").value.trim();
+  let lng = document.getElementById("zipAdd_lng").value.trim();
+
+  // ⭐ Strip degree symbols, spaces, and weird characters
+  lat = lat.replace(/°/g, "").replace(/\s+/g, "");
+  lng = lng.replace(/°/g, "").replace(/\s+/g, "");
+
+  // ⭐ Convert compass directions to signed numbers
+  // Latitude
+  if (/N$/i.test(lat)) lat = lat.replace(/[^0-9.]/g, "");
+  if (/S$/i.test(lat)) lat = "-" + lat.replace(/[^0-9.]/g, "");
+
+  // Longitude
+  if (/E$/i.test(lng)) lng = lng.replace(/[^0-9.]/g, "");
+  if (/W$/i.test(lng)) lng = "-" + lng.replace(/[^0-9.]/g, "");
+
+  // ⭐ Remove any leftover letters
+  lat = lat.replace(/[A-Za-z]/g, "");
+  lng = lng.replace(/[A-Za-z]/g, "");
+
+  // ⭐ Convert to numbers
+  lat = Number(lat);
+  lng = Number(lng);
+
+  // ⭐ Validate before saving
+  if (isNaN(lat) || isNaN(lng)) {
+    alert("Invalid latitude or longitude. Please check your values.");
+    return;
+  }
+
+  // ⭐ Save to backend
+  google.script.run
+    .withSuccessHandler(() => {
+      alert("ZIP added successfully. Please run the lookup again.");
+      closeAddZipForm();
+    })
+    .addZipToCoords(zip, city, state, lat, lng);
+}
+  // Initialize UI on load
+  renderSurchargeOptions();
+  updateModeVisibility();
+</script>
+
+</body>
+</html>
