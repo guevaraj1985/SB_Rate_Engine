@@ -45,7 +45,7 @@
 
 <body>
   <div class="iframe-wrapper">
-    <div id="loading" class="loading">Loading Joey’s B3PLRate Engine…</div>
+    <div id="loading" class="loading">Loading Joey’s Rate Engine…</div>
 
     <iframe
       src="https://script.google.com/macros/s/AKfycbzFTcOXx64N1JpXCcaythnMeVvcrIEgmh_IdKoz3QnJii0JlJekiqNQtRKRmE6Z1nIw/exec"
